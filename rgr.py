@@ -110,6 +110,61 @@ def make_table2(dataset):
     return pr, res
 
 
+def get_student_names(dataset):
+    names = []
+
+    index, stop = 0, len(dataset)
+    while True:
+        names.append(dataset[index][1])
+
+        if index + 3 == stop:
+            break
+        index = index + 3
+    return names
+
+
+def make_table3(names, types_percents, all_students_types, states):
+    dominant_types = []
+    for data in types_percents:
+        maxs = data.index(max(data))
+        dominant_types.append(maxs + 1)
+
+    table_headers = ["Ім'я студента"]
+
+    raw_headers = [
+        "ЧСС",
+        "Середня\nсиметрія Т",
+        "СКО\nсиметрії Т",
+        "SDNN",
+        "Індекс\nнапруги",
+        "Зсув ST,\nмв.",
+        "Інтервал\nP-Q(R), мс.",
+        "Площі\nT/R"
+    ]
+
+    for raw_header, dominant_type in zip(raw_headers, dominant_types):
+        table_headers.append(raw_header + f"\n(Тип {dominant_type})")
+
+    table_headers.append("Стан")
+
+    state_names = ["Задовільний", "Умовно задовільний", "Незадовільний"]
+
+    students_data = []
+    for name, student_types, state in zip(names, all_students_types, states):
+        fixed_name = '\n'.join(name.split(' '))
+        student_data = [fixed_name]
+        for dominant_type, student_type in zip(dominant_types, student_types):
+            if dominant_type == student_type:
+                student_data.append(f"{student_type} (+)")
+            else:
+                student_data.append(f"{student_type} (-)")
+        student_data.append(state_names[state])
+
+        students_data.append(student_data)
+
+    return table_headers, students_data
+
+
 if __name__ == '__main__':
     year_15, year_17 = read_file()
     types_15 = calc_types(year_15)
@@ -147,6 +202,7 @@ if __name__ == '__main__':
         tab_row = [table_1_labels[i]]
         max_el = max(row)
         for row_el in row:
+
             tab_row.append(f"[ {row_el} % ]" if row_el == max_el else f"{row_el} %")
         table_1_data.append(tab_row)
 
@@ -174,3 +230,9 @@ if __name__ == '__main__':
 
     table_2_string = tabulate(table_2_data, headers=table_2_headers, tablefmt='fancy_grid', stralign='center')
     print(table_2_string)
+
+    names = get_student_names(year_17)
+    table_headers, students_data = make_table3(names, table_15, types_17, status_17)
+
+    table_3_string = tabulate(students_data, headers=table_headers, tablefmt='fancy_grid', stralign='center')
+    print(table_3_string)
