@@ -1,38 +1,30 @@
 # -*- coding: utf-8 -*-
-
-import tkinter as tk
 import datetime
 import pyodbc
+from tabulate import tabulate
 
 
 def read_file():
-    mdb = r".\КПИ_БД_ОШІ.mdb"
-    drv = r"{Microsoft Access Driver (*.mdb, *.accdb)}"
-    pwd = r"pw"
+    connection_string = r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=.\КПИ_БД_ОШІ.mdb;"
 
-    con = pyodbc.connect(f"DRIVER={drv};DBQ={mdb};PWD={pwd}")
-    cur = con.cursor()
+    connection = pyodbc.connect(connection_string)
+    cursor = connection.cursor()
 
     query = r"select DATEandTIME, PATNAME, STRESS, attr1, attr3, attr4, attr9, attr17, attr21, attr32, attr37 from EXP_ATTRIBUTES"
-    raw_rows = cur.execute(query).fetchall()
-    cur.close()
-    con.close()
+    raw_rows = cursor.execute(query).fetchall()
+    cursor.close()
+    connection.close()
 
     index, stop = 0, len(raw_rows)
     rows = []
-    print(len(raw_rows))
     while True:
-        bad_row = False
         row = raw_rows[index:index + 3]
         for i, r in enumerate(row):
             for j, o in enumerate(r):
                 if o == None:
                     row[i][j] = 0
-                    # bad_row = True
-
-        if not bad_row:
-            for i in row:
-                rows.append(i)
+        for i in row:
+            rows.append(i)
         if index + 3 == stop:
             break
         index = index + 3
@@ -46,13 +38,19 @@ def read_file():
     return year_15, year_17
 
 
-def calc_type(a0, a1, a3):
-    h0 = 0.1 * abs(a0)
-    if (a1 - a0) > h0 and (a1 - a3) > h0: return 1
-    if (a0 - a1) > h0 and (a3 - a1) > h0: return 2
-    if (a1 - a0) > h0 or a3 - a1 > h0 or a3 - a0 > h0:  return 3
-    if a0 - a1 > h0 or a1 - a3 > h0 or a0 - a3 > h0:  return 4
-    return 5
+def calc_type(x1, x2, x3):
+    h0 = 0.1
+    hi = abs(h0 * x1)
+    if (x2 - x1) > hi and (x2 - x3) > hi:
+        return 1
+    elif (x1 - x2) > hi and (x3 - x2) > hi:
+        return 2
+    elif (x2 - x1) > hi or (x3 - x2) > hi or (x3 - x1) > hi:
+        return 3
+    elif (x1 - x2) > hi or (x2 - x3) > hi or (x1 - x3) > hi:
+        return 4
+    else:
+        return 5
 
 
 def calc_types(dataset):
@@ -81,7 +79,7 @@ def make_table1(dataset):
     for res in result:
         sum_res = sum(res)
         for i in range(len(res)):
-            res[i] = round(res[i] * 100 / sum_res, 3)
+            res[i] = round(res[i] * 100 / sum_res, 2)
     return result
 
 
@@ -122,60 +120,57 @@ if __name__ == '__main__':
     table2_1 = make_table2(status_15)
     table2_2 = make_table2(status_17)
 
-    # GUI
-    root = tk.Tk()
-    root.option_add('*Font', '12')
-    root.option_add('*Font', 'Times')
-
-    root.configure(bg='white')
-    root.configure(padx=5, pady=5)
-
-    panel_table_1 = tk.PanedWindow(root, bg='white')
-
-    label1 = tk.Label(panel_table_1, bg='white', padx=3, pady=8, text="Груповий розподіл типів реакцій показників на навантаження")
-    label1.pack()
-
     # Table 1
-    table1 = tk.Frame(panel_table_1, bg='white')
-    list_label1 = ["ЧСС", "Середня симетрія Т", "СКО симетрії Т", "SDNN",
-                   "Індекс напруги", "Зсув ST, мв.", "Інтервал P-Q(R), мс.", "Площі T/R"]
-    for i in range(len(table_15[0])):
-        tk.Label(table1, bg='white', text=f"Тип {i + 1}", padx=5, pady=5).grid(row=0, column=i + 1)
-    for i, row in enumerate(table_15):
-        maxs = max(row)
-        tk.Label(table1, bg='white', text=f"{list_label1[i]}", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=i + 1, column=0, sticky="nsew")
-        for j, leb in enumerate(row):
-            # l = tk.Label(table1, bg='white', text=f"{leb}%", borderwidth=1, relief="solid", padx=5, pady=5)
-            l = tk.Label(table1, bg='white', text="{:.1f} %".format(leb), borderwidth=1, relief="solid", padx=5, pady=5)
-            if leb == maxs:
-                l.configure(bg="lightgreen")
-            l.grid(row=i + 1, column=j + 1, sticky="nsew")
-    table1.pack()
+    table_1_data = []
 
-    panel_table_1.pack(padx=5, pady=5, side=tk.LEFT)
+    table_1_headers = [
+        "Показники",
+        "Тип 1\n(Максимум)",
+        "Тип 2\n(Мінімум)",
+        "Тип 3\n(Зростання)",
+        "Тип 4\n(Спадання)",
+        "Тип 5\n(Постійний)"
+    ]
+
+    table_1_labels = [
+        "ЧСС",
+        "Середня симетрія Т",
+        "СКО симетрії Т",
+        "SDNN",
+        "Індекс напруги",
+        "Зсув ST, мв.",
+        "Інтервал P-Q(R), мс.",
+        "Площі T/R"
+    ]
+
+    for i, row in enumerate(table_15):
+        tab_row = [table_1_labels[i]]
+        max_el = max(row)
+        for row_el in row:
+            tab_row.append(f"[ {row_el} % ]" if row_el == max_el else f"{row_el} %")
+        table_1_data.append(tab_row)
+
+    table_1_string = tabulate(table_1_data, headers=table_1_headers, tablefmt='fancy_grid', stralign='center')
+    print(table_1_string)
 
     # Table 2
-    panel_table_2 = tk.PanedWindow(root, bg='white')
+    table_2_data = []
 
-    label2 = tk.Label(panel_table_2, padx=3, pady=8, bg='white',
-                      text="\n\nРезультати порівняння індивідкальних характеристик\n" + " студентів (2017 рік) з домінантними реакціями")
-    label2.pack()
+    table_2_headers = [
+        "Стан",
+        "Кількість студентів",
+        "%"
+    ]
 
-    table2 = tk.Frame(panel_table_2, bg='white')
-    list_label2 = ["Задовільний", "Умовно задовільний", "Незадовільний"]
-    for i, text in enumerate(["Стан", "Кількість студентів", "%"]):
-        tk.Label(table2, bg='white', text=text, padx=5, pady=5).grid(row=0, column=i)
-    for i, row in enumerate(table2_2[1]):
-        tk.Label(table2, bg='white', text=list_label2[i], borderwidth=1, relief="solid", padx=5, pady=5).grid(row=i + 1, column=0, sticky="nsew")
-        l = tk.Label(table2, bg='white', text=f"{row}", borderwidth=1, relief="solid", padx=5, pady=5)
-        l.grid(row=i + 1, column=1, sticky="nsew")
-    for i, row in enumerate(table2_2[0]):
-        tk.Label(table2, bg='white', text=list_label2[i], borderwidth=1, relief="solid", padx=5, pady=5).grid(row=i + 1, column=0, sticky="nsew")
-        l = tk.Label(table2, bg='white', text=f"{row}", borderwidth=1, relief="solid", padx=5, pady=5)
-        l.grid(row=i + 1, column=2, sticky="nsew")
+    table_2_labels = [
+        "Задовільний",
+        "Умовно задовільний",
+        "Незадовільний"
+    ]
 
-    table2.pack()
+    for i, label in enumerate(table_2_labels):
+        row = [label, table2_2[1][i], table2_2[0][i]]
+        table_2_data.append(row)
 
-    panel_table_2.pack(padx=5, pady=5, side=tk.RIGHT)
-
-    root.mainloop()
+    table_2_string = tabulate(table_2_data, headers=table_2_headers, tablefmt='fancy_grid', stralign='center')
+    print(table_2_string)
